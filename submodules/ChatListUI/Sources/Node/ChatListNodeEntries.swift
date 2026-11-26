@@ -625,6 +625,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         ))
     }
     
+    // Hide the archive entry entirely, including its pull-down reveal.
+    groupItems.removeAll(where: { $0.id == .archive })
+    
     var result: [ChatListNodeEntry] = []
     
     var hasContacts = false
