@@ -1,0 +1,66 @@
+name: Hidden Archive - simulator build
+
+on:
+  push:
+    branches: [hidden-archive]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hidden-archive-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/hidden-archive'
+    runs-on: macos-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Select required Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')"
+          path="/Applications/Xcode_${version}.app/Contents/Developer"
+          if [[ -d "$path" ]]; then
+            sudo xcode-select -s "$path"
+          fi
+          actual="$(xcodebuild -version | head -n 1)"
+          echo "$actual"
+          if [[ "$actual" != "Xcode $version" ]]; then
+            echo "::error::Required Xcode $version is not available on this runner."
+            exit 1
+          fi
+      - name: Compile simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          python3 -u build-system/Make/Make.py \
+            --cacheDir="$HOME/telegram-bazel-cache" \
+            build \
+            --configurationPath=build-system/appstore-configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration=debug_sim_arm64 \
+            --buildNumber="$GITHUB_RUN_NUMBER"
+      - name: Package simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find -L bazel-bin/Telegram -maxdepth 3 -type d -name Telegram.app -print -quit)"
+          if [[ -z "$app" ]]; then
+            echo "::error::Simulator app bundle not found."
+            exit 1
+          fi
+          ditto -c -k --keepParent "$app" HiddenArchive-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HiddenArchive-Simulator
+          path: HiddenArchive-Simulator.zip
+          if-no-files-found: error
