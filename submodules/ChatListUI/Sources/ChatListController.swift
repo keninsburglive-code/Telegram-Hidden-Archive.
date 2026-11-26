@@ -2438,9 +2438,25 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public override func displayNodeDidLoad() {
         super.displayNodeDidLoad()
         
+        if self.location == .chatList(groupId: .root) {
+            let secretArchiveGesture = UITapGestureRecognizer(target: self, action: #selector(self.openSecretArchive))
+            secretArchiveGesture.numberOfTapsRequired = 3
+            secretArchiveGesture.numberOfTouchesRequired = 2
+            self.chatListDisplayNode.navigationBarView.view?.addGestureRecognizer(secretArchiveGesture)
+        }
+        
         Queue.mainQueue().after(1.0) {
             self.context.prefetchManager?.prepareNextGreetingSticker()
         }
+    }
+    
+    @objc private func openSecretArchive() {
+        guard self.location == .chatList(groupId: .root), let navigationController = self.navigationController as? NavigationController else {
+            return
+        }
+        let controller = ChatListControllerImpl(context: self.context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, enableDebugActions: false)
+        controller.navigationPresentation = .master
+        navigationController.pushViewController(controller)
     }
     
     public static var sharedPreviousPowerSavingEnabled: Bool?
